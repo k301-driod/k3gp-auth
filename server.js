@@ -1,6 +1,5 @@
 const express = require('express')
-const crypto  = require('crypto')
-const fs      = require('fs')
+const https   = require('https')
 const path    = require('path')
 const app     = express()
 
@@ -9,24 +8,48 @@ app.use(express.urlencoded({ extended: true }))
 app.use(express.static(path.join(__dirname, 'public')))
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme123'
-const API_SECRET     = process.env.API_SECRET     || 'k3gp_api_secret_change_this'
-const DB_FILE        = path.join(__dirname, 'data', 'keys.json')
+const ADMIN_PASSWORD  = process.env.ADMIN_PASSWORD  || 'changeme123'
+const API_SECRET      = process.env.API_SECRET      || 'k3gp_api_secret_change_this'
+const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY || ''
+const JSONBIN_BIN_ID  = process.env.JSONBIN_BIN_ID  || ''
 
-// ── DB helpers ───────────────────────────────────────────────────────────────
-function loadDB() {
-  try {
-    if (!fs.existsSync(path.dirname(DB_FILE))) fs.mkdirSync(path.dirname(DB_FILE), { recursive: true })
-    if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify({ keys: {} }))
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))
-  } catch { return { keys: {} } }
+// ── JSONBin helpers ──────────────────────────────────────────────────────────
+function jsonbinRequest(method, body) {
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null
+    const options = {
+      hostname: 'api.jsonbin.io',
+      port: 443,
+      path: `/v3/b/${JSONBIN_BIN_ID}`,
+      method,
+      headers: {
+        'X-Master-Key': JSONBIN_API_KEY,
+        'Content-Type': 'application/json',
+        'X-Bin-Versioning': 'false',
+      }
+    }
+    if (data) options.headers['Content-Length'] = Buffer.byteLength(data)
+    const req = https.request(options, (res) => {
+      let d = ''
+      res.on('data', c => d += c)
+      res.on('end', () => {
+        try { resolve(JSON.parse(d)) }
+        catch { reject(new Error('JSONBin parse error')) }
+      })
+    })
+    req.on('error', reject)
+    if (data) req.write(data)
+    req.end()
+  })
 }
 
-function saveDB(db) {
-  try {
-    if (!fs.existsSync(path.dirname(DB_FILE))) fs.mkdirSync(path.dirname(DB_FILE), { recursive: true })
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2))
-  } catch(e) { console.error('DB save error:', e) }
+async function loadDB() {
+  const res = await jsonbinRequest('GET')
+  return res.record || { keys: {} }
+}
+
+async function saveDB(db) {
+  await jsonbinRequest('PUT', db)
 }
 
 // ── Key generation ───────────────────────────────────────────────────────────
@@ -53,130 +76,134 @@ function requireApiSecret(req, res, next) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// APP API — called by K3GP Studio electron app
+// APP API
 // ════════════════════════════════════════════════════════════════════════════
 
-// Validate a key (called on every app launch)
-app.post('/api/validate', requireApiSecret, (req, res) => {
-  const { key, hwid } = req.body
-  if (!key || !hwid) return res.json({ valid: false, reason: 'Missing key or hwid.' })
+app.post('/api/validate', requireApiSecret, async (req, res) => {
+  try {
+    const { key, hwid } = req.body
+    if (!key || !hwid) return res.json({ valid: false, reason: 'Missing key or hwid.' })
 
-  const db = loadDB()
-  const entry = db.keys[key]
+    const db = await loadDB()
+    const entry = db.keys[key]
 
-  if (!entry) return res.json({ valid: false, reason: 'Invalid license key.' })
-  if (entry.revoked) return res.json({ valid: false, reason: 'This license has been revoked.' })
+    if (!entry) return res.json({ valid: false, reason: 'Invalid license key.' })
+    if (entry.revoked) return res.json({ valid: false, reason: 'This license has been revoked.' })
 
-  // Check expiry
-  if (entry.plan !== 'perm' && entry.expiresAt) {
-    if (Date.now() > entry.expiresAt) {
-      return res.json({ valid: false, reason: `Your ${entry.plan} license has expired.` })
+    if (entry.plan !== 'perm' && entry.expiresAt) {
+      if (Date.now() > entry.expiresAt) {
+        return res.json({ valid: false, reason: `Your ${entry.plan} license has expired.` })
+      }
     }
-  }
 
-  // HWID lock
-  if (!entry.hwid) {
-    // First activation — lock to this machine
-    entry.hwid = hwid
-    entry.activatedAt = Date.now()
-    db.keys[key] = entry
-    saveDB(db)
-    return res.json({ valid: true, plan: entry.plan, firstActivation: true })
-  }
-
-  if (entry.hwid !== hwid) {
-    return res.json({ valid: false, reason: 'This key is already activated on a different machine.' })
-  }
-
-  return res.json({ valid: true, plan: entry.plan })
-})
-
-// ════════════════════════════════════════════════════════════════════════════
-// ADMIN API — called by dashboard
-// ════════════════════════════════════════════════════════════════════════════
-
-// Get all keys
-app.get('/admin/api/keys', requireAdmin, (req, res) => {
-  const db = loadDB()
-  res.json({ keys: db.keys })
-})
-
-// Generate new keys
-app.post('/admin/api/generate', requireAdmin, (req, res) => {
-  const { plan, count } = req.body
-  if (!['weekly','monthly','perm'].includes(plan)) return res.status(400).json({ error: 'Invalid plan' })
-  const n = Math.min(parseInt(count) || 1, 100)
-  const db = loadDB()
-  const generated = []
-
-  for (let i = 0; i < n; i++) {
-    const key = generateKey(plan)
-    const daysValid = plan === 'weekly' ? 7 : plan === 'monthly' ? 30 : null
-    db.keys[key] = {
-      plan,
-      createdAt: Date.now(),
-      expiresAt: daysValid ? Date.now() + daysValid * 86400000 : null,
-      hwid: null,
-      activatedAt: null,
-      revoked: false,
-      note: req.body.note || ''
+    if (!entry.hwid) {
+      entry.hwid = hwid
+      entry.activatedAt = Date.now()
+      db.keys[key] = entry
+      await saveDB(db)
+      return res.json({ valid: true, plan: entry.plan, firstActivation: true })
     }
-    generated.push(key)
+
+    if (entry.hwid !== hwid) {
+      return res.json({ valid: false, reason: 'This key is already activated on a different machine.' })
+    }
+
+    return res.json({ valid: true, plan: entry.plan })
+  } catch(e) {
+    console.error('validate error:', e)
+    res.json({ valid: false, reason: 'Server error. Try again.' })
   }
-
-  saveDB(db)
-  res.json({ generated })
 })
 
-// Revoke a key
-app.post('/admin/api/revoke', requireAdmin, (req, res) => {
-  const { key } = req.body
-  const db = loadDB()
-  if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
-  db.keys[key].revoked = true
-  saveDB(db)
-  res.json({ success: true })
+// ════════════════════════════════════════════════════════════════════════════
+// ADMIN API
+// ════════════════════════════════════════════════════════════════════════════
+
+app.get('/admin/api/keys', requireAdmin, async (req, res) => {
+  try {
+    const db = await loadDB()
+    res.json({ keys: db.keys })
+  } catch(e) { res.status(500).json({ error: 'DB error' }) }
 })
 
-// Delete a key entirely
-app.post('/admin/api/delete', requireAdmin, (req, res) => {
-  const { key } = req.body
-  const db = loadDB()
-  if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
-  delete db.keys[key]
-  saveDB(db)
-  res.json({ success: true })
+app.post('/admin/api/generate', requireAdmin, async (req, res) => {
+  try {
+    const { plan, count, note } = req.body
+    if (!['weekly','monthly','perm'].includes(plan)) return res.status(400).json({ error: 'Invalid plan' })
+    const n = Math.min(parseInt(count) || 1, 100)
+    const db = await loadDB()
+    const generated = []
+
+    for (let i = 0; i < n; i++) {
+      const key = generateKey(plan)
+      const daysValid = plan === 'weekly' ? 7 : plan === 'monthly' ? 30 : null
+      db.keys[key] = {
+        plan, createdAt: Date.now(),
+        expiresAt: daysValid ? Date.now() + daysValid * 86400000 : null,
+        hwid: null, activatedAt: null, revoked: false, note: note || ''
+      }
+      generated.push(key)
+    }
+
+    await saveDB(db)
+    res.json({ generated })
+  } catch(e) { res.status(500).json({ error: 'DB error' }) }
 })
 
-// Reset HWID (let key activate on a new machine)
-app.post('/admin/api/reset-hwid', requireAdmin, (req, res) => {
-  const { key } = req.body
-  const db = loadDB()
-  if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
-  db.keys[key].hwid = null
-  db.keys[key].activatedAt = null
-  saveDB(db)
-  res.json({ success: true })
+app.post('/admin/api/revoke', requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.body
+    const db = await loadDB()
+    if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
+    db.keys[key].revoked = true
+    await saveDB(db)
+    res.json({ success: true })
+  } catch(e) { res.status(500).json({ error: 'DB error' }) }
 })
 
-// Unrevoke a key
-app.post('/admin/api/unrevoke', requireAdmin, (req, res) => {
-  const { key } = req.body
-  const db = loadDB()
-  if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
-  db.keys[key].revoked = false
-  saveDB(db)
-  res.json({ success: true })
+app.post('/admin/api/delete', requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.body
+    const db = await loadDB()
+    if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
+    delete db.keys[key]
+    await saveDB(db)
+    res.json({ success: true })
+  } catch(e) { res.status(500).json({ error: 'DB error' }) }
 })
 
-// Update note on a key
-app.post('/admin/api/note', requireAdmin, (req, res) => {
-  const { key, note } = req.body
-  const db = loadDB()
-  if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
-  db.keys[key].note = note
-  saveDB(db)
-  res.json({ success: true })
+app.post('/admin/api/reset-hwid', requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.body
+    const db = await loadDB()
+    if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
+    db.keys[key].hwid = null
+    db.keys[key].activatedAt = null
+    await saveDB(db)
+    res.json({ success: true })
+  } catch(e) { res.status(500).json({ error: 'DB error' }) }
+})
+
+app.post('/admin/api/unrevoke', requireAdmin, async (req, res) => {
+  try {
+    const { key } = req.body
+    const db = await loadDB()
+    if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
+    db.keys[key].revoked = false
+    await saveDB(db)
+    res.json({ success: true })
+  } catch(e) { res.status(500).json({ error: 'DB error' }) }
+})
+
+app.post('/admin/api/note', requireAdmin, async (req, res) => {
+  try {
+    const { key, note } = req.body
+    const db = await loadDB()
+    if (!db.keys[key]) return res.status(404).json({ error: 'Key not found' })
+    db.keys[key].note = note
+    await saveDB(db)
+    res.json({ success: true })
+  } catch(e) { res.status(500).json({ error: 'DB error' }) }
 })
 
 const PORT = process.env.PORT || 3000
