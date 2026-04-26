@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K3GP License Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080c14;--surface:#0d1320;--surface2:#121929;--card:#141c2e;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.1);
+  --accent:#ff6b35;--accent-dim:rgba(255,107,53,0.15);
+  --green:#00e87a;--green-dim:rgba(0,232,122,0.1);
+  --red:#ff4466;--red-dim:rgba(255,68,102,0.1);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,0.12);
+  --yellow:#ffd060;--yellow-dim:rgba(255,208,96,0.1);
+  --purple:#b388ff;--purple-dim:rgba(179,136,255,0.12);
+  --text:#e8f0ff;--text2:#7d91b5;--text3:#3d4f6b;
+  --mono:'Courier New',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;font-size:13px;min-height:100vh;}
+
+/* Login */
+#loginWrap{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+.login-box{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:40px;width:360px;text-align:center;}
+.login-box h1{font-size:22px;font-weight:800;margin-bottom:6px;}
+.login-box h1 span{color:var(--accent);}
+.login-box p{color:var(--text2);font-size:12px;margin-bottom:24px;}
+.login-box input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;margin-bottom:12px;outline:none;}
+.login-box input:focus{border-color:var(--accent);}
+.btn{height:38px;padding:0 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-accent{background:var(--accent-dim);border:1px solid rgba(255,107,53,0.4);color:var(--accent);}
+.btn-accent:hover{background:rgba(255,107,53,0.25);}
+.btn-green{background:var(--green-dim);border:1px solid rgba(0,232,122,0.3);color:var(--green);}
+.btn-green:hover{background:rgba(0,232,122,0.2);}
+.btn-red{background:var(--red-dim);border:1px solid rgba(255,68,102,0.3);color:var(--red);}
+.btn-red:hover{background:rgba(255,68,102,0.2);}
+.btn-blue{background:var(--blue-dim);border:1px solid rgba(77,159,255,0.3);color:var(--blue);}
+.btn-blue:hover{background:rgba(77,159,255,0.2);}
+.btn-yellow{background:var(--yellow-dim);border:1px solid rgba(255,208,96,0.3);color:var(--yellow);}
+.btn-yellow:hover{background:rgba(255,208,96,0.2);}
+.btn-sm{height:28px;padding:0 10px;font-size:11px;border-radius:6px;}
+.btn-full{width:100%;justify-content:center;}
+.login-err{color:var(--red);font-size:12px;margin-top:8px;min-height:18px;}
+
+/* App */
+#app{display:none;flex-direction:column;min-height:100vh;}
+.topbar{height:54px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;}
+.topbar h1{font-size:16px;font-weight:800;}
+.topbar h1 span{color:var(--accent);}
+.topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center;}
+.tag{padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;}
+.tag-green{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,232,122,0.25);}
+.tag-red{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,68,102,0.25);}
+.tag-yellow{background:var(--yellow-dim);color:var(--yellow);border:1px solid rgba(255,208,96,0.25);}
+.tag-blue{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,159,255,0.25);}
+.tag-purple{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(179,136,255,0.25);}
+.content{flex:1;padding:24px;max-width:1200px;margin:0 auto;width:100%;}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;}
+.stat-label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;}
+.stat-val{font-size:28px;font-weight:800;color:var(--text);}
+.stat-val.green{color:var(--green);}
+.stat-val.red{color:var(--red);}
+.stat-val.blue{color:var(--blue);}
+.stat-val.yellow{color:var(--yellow);}
+
+/* Generate panel */
+.gen-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px;}
+.panel-title{font-size:13px;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.gen-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.gen-row select,.gen-row input{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;}
+.gen-row select:focus,.gen-row input:focus{border-color:var(--accent);}
+.gen-note{flex:1;min-width:180px;}
+.gen-output{margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--green);display:none;white-space:pre-wrap;word-break:break-all;}
+
+/* Keys table */
+.keys-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.keys-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.search-box{flex:1;max-width:300px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;color:var(--text);font-size:13px;outline:none;}
+.search-box:focus{border-color:var(--accent);}
+.filter-btn{height:32px;padding:0 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:0.5px;}
+.filter-btn:hover{border-color:var(--border2);color:var(--text);}
+.filter-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+table{width:100%;border-collapse:collapse;}
+th{padding:10px 16px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--surface2);}
+td{padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.02);}
+.key-text{font-family:var(--mono);font-size:11px;color:var(--text);cursor:pointer;user-select:all;}
+.key-text:hover{color:var(--accent);}
+.hwid-text{font-family:var(--mono);font-size:10px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.note-text{color:var(--text2);font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.actions{display:flex;gap:6px;flex-wrap:wrap;}
+.empty{padding:40px;text-align:center;color:var(--text3);}
+
+/* Toast */
+#toast{position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9999;}
+#toast.show{opacity:1;}
+#toast.ok{background:rgba(0,232,122,0.15);border:1px solid rgba(0,232,122,0.3);color:var(--green);}
+#toast.err{background:rgba(255,68,102,0.15);border:1px solid rgba(255,68,102,0.3);color:var(--red);}
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginWrap">
+  <div class="login-box">
+    <h1>K3<span>GP</span> Admin</h1>
+    <p>License Key Management Dashboard</p>
+    <input type="password" id="pwInput" placeholder="Admin password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn btn-accent btn-full" onclick="doLogin()">Sign In</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <div class="topbar">
+    <h1>K3<span>GP</span> License Admin</h1>
+    <div class="topbar-right">
+      <span id="totalKeysTag" class="tag tag-blue">0 keys</span>
+      <button class="btn btn-accent btn-sm" onclick="loadKeys()">↻ Refresh</button>
+      <button class="btn btn-red btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-card"><div class="stat-label">Total Keys</div><div class="stat-val blue" id="statTotal">0</div></div>
+      <div class="stat-card"><div class="stat-label">Activated</div><div class="stat-val green" id="statActivated">0</div></div>
+      <div class="stat-card"><div class="stat-label">Revoked</div><div class="stat-val red" id="statRevoked">0</div></div>
+      <div class="stat-card"><div class="stat-label">Unused</div><div class="stat-val yellow" id="statUnused">0</div></div>
+    </div>
+
+    <!-- Generate -->
+    <div class="gen-panel">
+      <div class="panel-title">⚡ Generate Keys</div>
+      <div class="gen-row">
+        <select id="genPlan">
+          <option value="perm">Lifetime</option>
+          <option value="monthly">Monthly (30 days)</option>
+          <option value="weekly">Weekly (7 days)</option>
+        </select>
+        <input type="number" id="genCount" value="1" min="1" max="100" style="width:80px;" placeholder="Count">
+        <input type="text" id="genNote" class="gen-note" placeholder="Note (e.g. customer name)">
+        <button class="btn btn-green" onclick="generateKeys()">Generate</button>
+      </div>
+      <div class="gen-output" id="genOutput"></div>
+    </div>
+
+    <!-- Keys Table -->
+    <div class="keys-panel">
+      <div class="keys-header">
+        <div class="panel-title" style="margin:0">🔑 License Keys</div>
+        <input type="text" class="search-box" id="searchBox" placeholder="Search keys, notes, HWID..." oninput="renderTable()">
+        <button class="filter-btn active" data-f="all" onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn" data-f="active" onclick="setFilter('active',this)">Active</button>
+        <button class="filter-btn" data-f="unused" onclick="setFilter('unused',this)">Unused</button>
+        <button class="filter-btn" data-f="revoked" onclick="setFilter('revoked',this)">Revoked</button>
+        <button class="filter-btn" data-f="perm" onclick="setFilter('perm',this)">Lifetime</button>
+        <button class="filter-btn" data-f="monthly" onclick="setFilter('monthly',this)">Monthly</button>
+        <button class="filter-btn" data-f="weekly" onclick="setFilter('weekly',this)">Weekly</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>HWID</th>
+            <th>Activated</th>
+            <th>Expires</th>
+            <th>Note</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="keysBody"></tbody>
+      </table>
+      <div class="empty" id="emptyMsg" style="display:none">No keys found.</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let adminToken = ''
+let allKeys = {}
+let currentFilter = 'all'
+
+function doLogin() {
+  const pw = document.getElementById('pwInput').value
+  if (!pw) return
+  adminToken = pw
+  fetch('/admin/api/keys', { headers: { 'x-admin-token': pw } })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('loginErr').textContent = 'Wrong password.'
+        adminToken = ''
+        return
+      }
+      document.getElementById('loginWrap').style.display = 'none'
+      document.getElementById('app').style.display = 'flex'
+      allKeys = data.keys || {}
+      renderStats()
+      renderTable()
+    })
+    .catch(() => { document.getElementById('loginErr').textContent = 'Could not connect to server.' })
+}
+
+function logout() {
+  adminToken = ''
+  allKeys = {}
+  document.getElementById('loginWrap').style.display = 'flex'
+  document.getElementById('app').style.display = 'none'
+  document.getElementById('pwInput').value = ''
+}
+
+function loadKeys() {
+  fetch('/admin/api/keys', { headers: { 'x-admin-token': adminToken } })
+    .then(r => r.json())
+    .then(data => {
+      allKeys = data.keys || {}
+      renderStats()
+      renderTable()
+      toast('Refreshed', 'ok')
+    })
+}
+
+function renderStats() {
+  const keys = Object.values(allKeys)
+  const total     = keys.length
+  const activated = keys.filter(k => k.hwid && !k.revoked).length
+  const revoked   = keys.filter(k => k.revoked).length
+  const unused    = keys.filter(k => !k.hwid && !k.revoked).length
+  document.getElementById('statTotal').textContent     = total
+  document.getElementById('statActivated').textContent = activated
+  document.getElementById('statRevoked').textContent   = revoked
+  document.getElementById('statUnused').textContent    = unused
+  document.getElementById('totalKeysTag').textContent  = total + ' keys'
+}
+
+function setFilter(f, btn) {
+  currentFilter = f
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  renderTable()
+}
+
+function renderTable() {
+  const search = document.getElementById('searchBox').value.toLowerCase()
+  const body = document.getElementById('keysBody')
+  const empty = document.getElementById('emptyMsg')
+  body.innerHTML = ''
+
+  const entries = Object.entries(allKeys).filter(([key, k]) => {
+    if (currentFilter === 'active'  && (!k.hwid || k.revoked)) return false
+    if (currentFilter === 'unused'  && (k.hwid || k.revoked))  return false
+    if (currentFilter === 'revoked' && !k.revoked)              return false
+    if (currentFilter === 'perm'    && k.plan !== 'perm')       return false
+    if (currentFilter === 'monthly' && k.plan !== 'monthly')    return false
+    if (currentFilter === 'weekly'  && k.plan !== 'weekly')     return false
+    if (search) {
+      const haystack = (key + (k.note||'') + (k.hwid||'')).toLowerCase()
+      if (!haystack.includes(search)) return false
+    }
+    return true
+  })
+
+  if (!entries.length) { empty.style.display = 'block'; return }
+  empty.style.display = 'none'
+
+  entries.sort(([,a],[,b]) => b.createdAt - a.createdAt)
+
+  entries.forEach(([key, k]) => {
+    const tr = document.createElement('tr')
+
+    let statusTag = ''
+    if (k.revoked)     statusTag = '<span class="tag tag-red">Revoked</span>'
+    else if (k.hwid)   statusTag = '<span class="tag tag-green">Active</span>'
+    else               statusTag = '<span class="tag tag-yellow">Unused</span>'
+
+    let planTag = ''
+    if (k.plan === 'perm')    planTag = '<span class="tag tag-purple">Lifetime</span>'
+    else if (k.plan === 'monthly') planTag = '<span class="tag tag-blue">Monthly</span>'
+    else                      planTag = '<span class="tag tag-yellow">Weekly</span>'
+
+    const activated = k.activatedAt ? new Date(k.activatedAt).toLocaleDateString() : '—'
+    const expires   = k.expiresAt   ? new Date(k.expiresAt).toLocaleDateString()   : '—'
+    const hwid      = k.hwid ? `<div class="hwid-text" title="${k.hwid}">${k.hwid}</div>` : '<span style="color:var(--text3)">—</span>'
+    const note      = `<div class="note-text" title="${k.note||''}">${k.note||'—'}</div>`
+
+    let actions = ''
+    if (!k.revoked) {
+      actions += `<button class="btn btn-red btn-sm" onclick="revokeKey('${key}')">Revoke</button>`
+    } else {
+      actions += `<button class="btn btn-green btn-sm" onclick="unrevokeKey('${key}')">Unrevoke</button>`
+    }
+    if (k.hwid) {
+      actions += `<button class="btn btn-yellow btn-sm" onclick="resetHwid('${key}')">Reset HWID</button>`
+    }
+    actions += `<button class="btn btn-blue btn-sm" onclick="copyKey('${key}')">Copy</button>`
+    actions += `<button class="btn btn-red btn-sm" onclick="deleteKey('${key}')">Delete</button>`
+
+    tr.innerHTML = `
+      <td><span class="key-text" onclick="copyKey('${key}')" title="Click to copy">${key}</span></td>
+      <td>${planTag}</td>
+      <td>${statusTag}</td>
+      <td>${hwid}</td>
+      <td>${activated}</td>
+      <td>${expires}</td>
+      <td>${note}</td>
+      <td><div class="actions">${actions}</div></td>
+    `
+    body.appendChild(tr)
+  })
+}
+
+function generateKeys() {
+  const plan  = document.getElementById('genPlan').value
+  const count = parseInt(document.getElementById('genCount').value) || 1
+  const note  = document.getElementById('genNote').value.trim()
+
+  fetch('/admin/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ plan, count, note })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { toast(data.error, 'err'); return }
+    const out = document.getElementById('genOutput')
+    out.style.display = 'block'
+    out.textContent = data.generated.join('\n')
+    data.generated.forEach(key => {
+      const daysValid = plan === 'weekly' ? 7 : plan === 'monthly' ? 30 : null
+      allKeys[key] = { plan, createdAt: Date.now(), expiresAt: daysValid ? Date.now() + daysValid*86400000 : null, hwid: null, activatedAt: null, revoked: false, note }
+    })
+    renderStats()
+    renderTable()
+    toast(`Generated ${data.generated.length} key(s)`, 'ok')
+  })
+}
+
+function revokeKey(key) {
+  if (!confirm(`Revoke key ${key}?\nThe user will be locked out immediately.`)) return
+  fetch('/admin/api/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ key })
+  }).then(r => r.json()).then(data => {
+    if (data.success) { allKeys[key].revoked = true; renderStats(); renderTable(); toast('Key revoked', 'ok') }
+    else toast(data.error || 'Error', 'err')
+  })
+}
+
+function unrevokeKey(key) {
+  fetch('/admin/api/unrevoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ key })
+  }).then(r => r.json()).then(data => {
+    if (data.success) { allKeys[key].revoked = false; renderStats(); renderTable(); toast('Key unrevoked', 'ok') }
+    else toast(data.error || 'Error', 'err')
+  })
+}
+
+function resetHwid(key) {
+  if (!confirm(`Reset HWID for ${key}?\nThis lets the key activate on a new machine.`)) return
+  fetch('/admin/api/reset-hwid', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ key })
+  }).then(r => r.json()).then(data => {
+    if (data.success) { allKeys[key].hwid = null; allKeys[key].activatedAt = null; renderStats(); renderTable(); toast('HWID reset', 'ok') }
+    else toast(data.error || 'Error', 'err')
+  })
+}
+
+function deleteKey(key) {
+  if (!confirm(`Permanently delete key ${key}?`)) return
+  fetch('/admin/api/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ key })
+  }).then(r => r.json()).then(data => {
+    if (data.success) { delete allKeys[key]; renderStats(); renderTable(); toast('Key deleted', 'ok') }
+    else toast(data.error || 'Error', 'err')
+  })
+}
+
+function copyKey(key) {
+  navigator.clipboard.writeText(key).then(() => toast('Copied!', 'ok'))
+}
+
+function toast(msg, type) {
+  const t = document.getElementById('toast')
+  t.textContent = msg
+  t.className = `toast show ${type}`
+  clearTimeout(t._t)
+  t._t = setTimeout(() => t.classList.remove('show'), 2500)
+}
+</script>
+</body>
+</html>
